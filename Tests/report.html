@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    sort_column(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+
+        if (key_a == key_b) return 0;
+
+        if (reversed) {
+            return (key_a < key_b ? 1 : -1);
+        } else {
+            return (key_a > key_b ? 1 : -1);
+        }
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 06-Dec-2021 at 13:34:29 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v2.0.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Base URL</td>
+        <td></td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;6.2.5&apos;, &apos;py&apos;: &apos;1.11.0&apos;, &apos;pluggy&apos;: &apos;1.0.0&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>macOS-12.0.1-arm64-arm-64bit</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;html&apos;: &apos;2.0.1&apos;, &apos;variables&apos;: &apos;1.9.0&apos;, &apos;base-url&apos;: &apos;1.4.2&apos;, &apos;rerunfailures&apos;: &apos;10.2&apos;, &apos;metadata&apos;: &apos;1.11.0&apos;, &apos;seleniumbase&apos;: &apos;2.1.4&apos;, &apos;xdist&apos;: &apos;2.4.0&apos;, &apos;ordering&apos;: &apos;0.6&apos;, &apos;forked&apos;: &apos;1.3.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.0</td></tr></table>
+    <h2>Summary</h2>
+    <p>9 tests ran in 58.14 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">2 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">7 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">0 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_website.py::TestHorizontalScrolling::test_homepage[chrome]</td>
+          <td class="col-duration">9.82</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;Tests.test_website.TestHorizontalScrolling object at 0x106bd3250&gt;<br/><br/>    def test_homepage(self):<br/>        self.pageActions = PageActions(self.driver)<br/>        self.pageActions.accept_cookies()<br/>        self.pageActions.horizontal_scroll()<br/>        self.pageActions.do_screenshot(&quot;./Screen/homepage1.png&quot;)<br/>        self.pageActions.horizontal_scroll_off()<br/>        self.pageActions.do_screenshot(&quot;./Screen/homepage2.png&quot;)<br/>&gt;       self.pageActions.do_compare_img(&quot;homepage1.png&quot;, &quot;homepage2.png&quot;)<br/><br/>test_website.py:14: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>../Pages/PageActions.py:50: in do_compare_img<br/>    self.do_compare(name1, name2)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;Pages.PageActions.PageActions object at 0x106bd31c0&gt;, name1 = &#x27;homepage1.png&#x27;, name2 = &#x27;homepage2.png&#x27;<br/><br/>    def do_compare(self, name1, name2):<br/>        directory = &quot;/Users/karolis/Documents/pythonProject/Its_Learning/Tests/Screen&quot;<br/>        image1 = &quot;{}/{}&quot;.format(directory, name1)<br/>        image2 = &quot;{}/{}&quot;.format(directory, name2)<br/>    <br/>        screenshot1 = self.hash_it(image1)<br/>        screenshot2 = self.hash_it(image2)<br/>&gt;       assert screenshot1 == screenshot2, &quot;Image HASH do not match. {} vs {}&quot;.format(screenshot1, screenshot2)<br/><span class="error">E       AssertionError: Image HASH do not match. a3cbc7438924cad10794df8655c7dd5e vs b0edeb8614afb38124725b6d90891c6c</span><br/><br/>compareImage.py:19: AssertionError<br/> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 96.0.4664
+Get LATEST chromedriver version for 96.0.4664 google-chrome
+Driver [/Users/karolis/.wdm/drivers/chromedriver/mac64/96.0.4664.45/chromedriver] found in cache
+<br/> -------------------------------Captured log setup------------------------------- <br/>[32mINFO    [0m WDM:logger.py:26 
+
+[32mINFO    [0m WDM:logger.py:26 ====== WebDriver manager ======
+[32mINFO    [0m WDM:logger.py:26 Current google-chrome version is 96.0.4664
+[32mINFO    [0m WDM:logger.py:26 Get LATEST chromedriver version for 96.0.4664 google-chrome
+[32mINFO    [0m WDM:logger.py:26 Driver [/Users/karolis/.wdm/drivers/chromedriver/mac64/96.0.4664.45/chromedriver] found in cache<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_website.py::TestHorizontalScrolling::test_skole_page[chrome]</td>
+          <td class="col-duration">5.96</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;Tests.test_website.TestHorizontalScrolling object at 0x106c6e170&gt;<br/><br/>    def test_skole_page(self):<br/>        self.pageActions = PageActions(self.driver)<br/>        self.pageActions.skole_page()<br/>        self.pageActions.horizontal_scroll()<br/>        self.pageActions.do_screenshot(&quot;./Screen/skole1.png&quot;)<br/>        self.pageActions.horizontal_scroll_off()<br/>        self.pageActions.do_screenshot(&quot;./Screen/skole2.png&quot;)<br/>&gt;       self.pageActions.do_compare_img(&quot;skole1.png&quot;, &quot;skole2.png&quot;)<br/><br/>test_website.py:23: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>../Pages/PageActions.py:50: in do_compare_img<br/>    self.do_compare(name1, name2)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;Pages.PageActions.PageActions object at 0x106c6cfd0&gt;, name1 = &#x27;skole1.png&#x27;, name2 = &#x27;skole2.png&#x27;<br/><br/>    def do_compare(self, name1, name2):<br/>        directory = &quot;/Users/karolis/Documents/pythonProject/Its_Learning/Tests/Screen&quot;<br/>        image1 = &quot;{}/{}&quot;.format(directory, name1)<br/>        image2 = &quot;{}/{}&quot;.format(directory, name2)<br/>    <br/>        screenshot1 = self.hash_it(image1)<br/>        screenshot2 = self.hash_it(image2)<br/>&gt;       assert screenshot1 == screenshot2, &quot;Image HASH do not match. {} vs {}&quot;.format(screenshot1, screenshot2)<br/><span class="error">E       AssertionError: Image HASH do not match. cda93e9351303d65667beb70243c99c1 vs 9c3fd5b859d4cdcca56bd09f23b75e3c</span><br/><br/>compareImage.py:19: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_website.py::TestHorizontalScrolling::test_utdanning_page[chrome]</td>
+          <td class="col-duration">5.02</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;Tests.test_website.TestHorizontalScrolling object at 0x106ca2980&gt;<br/><br/>    def test_utdanning_page(self):<br/>        self.pageActions = PageActions(self.driver)<br/>        self.pageActions.utdanning_page()<br/>        self.pageActions.horizontal_scroll()<br/>        self.pageActions.do_screenshot(&quot;./Screen/utdanning1.png&quot;)<br/>        self.pageActions.horizontal_scroll_off()<br/>        self.pageActions.do_screenshot(&quot;./Screen/utdanning2.png&quot;)<br/>&gt;       self.pageActions.do_compare_img(&quot;utdanning1.png&quot;, &quot;utdanning2.png&quot;)<br/><br/>test_website.py:32: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>../Pages/PageActions.py:50: in do_compare_img<br/>    self.do_compare(name1, name2)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;Pages.PageActions.PageActions object at 0x106ca2770&gt;, name1 = &#x27;utdanning1.png&#x27;, name2 = &#x27;utdanning2.png&#x27;<br/><br/>    def do_compare(self, name1, name2):<br/>        directory = &quot;/Users/karolis/Documents/pythonProject/Its_Learning/Tests/Screen&quot;<br/>        image1 = &quot;{}/{}&quot;.format(directory, name1)<br/>        image2 = &quot;{}/{}&quot;.format(directory, name2)<br/>    <br/>        screenshot1 = self.hash_it(image1)<br/>        screenshot2 = self.hash_it(image2)<br/>&gt;       assert screenshot1 == screenshot2, &quot;Image HASH do not match. {} vs {}&quot;.format(screenshot1, screenshot2)<br/><span class="error">E       AssertionError: Image HASH do not match. 551900824fd8c268d7a5f9ebd3297f75 vs ff6396b598567d53c657b6b12740a752</span><br/><br/>compareImage.py:19: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_website.py::TestHorizontalScrolling::test_kontakt_oss_page[chrome]</td>
+          <td class="col-duration">5.81</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;Tests.test_website.TestHorizontalScrolling object at 0x106ca69b0&gt;<br/><br/>    def test_kontakt_oss_page(self):<br/>        self.pageActions = PageActions(self.driver)<br/>        self.pageActions.kontakt_oss_page()<br/>        self.pageActions.horizontal_scroll()<br/>        self.pageActions.do_screenshot(&quot;./Screen/kontaktOss1.png&quot;)<br/>        self.pageActions.horizontal_scroll_off()<br/>        self.pageActions.do_screenshot(&quot;./Screen/kontaktOss2.png&quot;)<br/>&gt;       self.pageActions.do_compare_img(&quot;kontaktOss1.png&quot;, &quot;kontaktOss2.png&quot;)<br/><br/>test_website.py:59: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>../Pages/PageActions.py:50: in do_compare_img<br/>    self.do_compare(name1, name2)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;Pages.PageActions.PageActions object at 0x106ca6620&gt;, name1 = &#x27;kontaktOss1.png&#x27;, name2 = &#x27;kontaktOss2.png&#x27;<br/><br/>    def do_compare(self, name1, name2):<br/>        directory = &quot;/Users/karolis/Documents/pythonProject/Its_Learning/Tests/Screen&quot;<br/>        image1 = &quot;{}/{}&quot;.format(directory, name1)<br/>        image2 = &quot;{}/{}&quot;.format(directory, name2)<br/>    <br/>        screenshot1 = self.hash_it(image1)<br/>        screenshot2 = self.hash_it(image2)<br/>&gt;       assert screenshot1 == screenshot2, &quot;Image HASH do not match. {} vs {}&quot;.format(screenshot1, screenshot2)<br/><span class="error">E       AssertionError: Image HASH do not match. 8e845b16f4b0a1c85fa06f2e8be8afa8 vs 44da9b0b1aeaea2a629471cc88379a52</span><br/><br/>compareImage.py:19: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_website.py::TestHorizontalScrolling::test_partnere_page[chrome]</td>
+          <td class="col-duration">5.07</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;Tests.test_website.TestHorizontalScrolling object at 0x106c6cfa0&gt;<br/><br/>    def test_partnere_page(self):<br/>        self.pageActions = PageActions(self.driver)<br/>        self.pageActions.partnere_page()<br/>        self.pageActions.horizontal_scroll()<br/>        self.pageActions.do_screenshot(&quot;./Screen/partnere1.png&quot;)<br/>        self.pageActions.horizontal_scroll_off()<br/>        self.pageActions.do_screenshot(&quot;./Screen/partnere2.png&quot;)<br/>&gt;       self.pageActions.do_compare_img(&quot;partnere1.png&quot;, &quot;partnere2.png&quot;)<br/><br/>test_website.py:68: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>../Pages/PageActions.py:50: in do_compare_img<br/>    self.do_compare(name1, name2)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;Pages.PageActions.PageActions object at 0x106c6cd30&gt;, name1 = &#x27;partnere1.png&#x27;, name2 = &#x27;partnere2.png&#x27;<br/><br/>    def do_compare(self, name1, name2):<br/>        directory = &quot;/Users/karolis/Documents/pythonProject/Its_Learning/Tests/Screen&quot;<br/>        image1 = &quot;{}/{}&quot;.format(directory, name1)<br/>        image2 = &quot;{}/{}&quot;.format(directory, name2)<br/>    <br/>        screenshot1 = self.hash_it(image1)<br/>        screenshot2 = self.hash_it(image2)<br/>&gt;       assert screenshot1 == screenshot2, &quot;Image HASH do not match. {} vs {}&quot;.format(screenshot1, screenshot2)<br/><span class="error">E       AssertionError: Image HASH do not match. 3db6e92248b32d0da8c650fa266910f6 vs 773bd872ae031175e646b14c4ae2ff3f</span><br/><br/>compareImage.py:19: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_website.py::TestHorizontalScrolling::test_tjenester_page[chrome]</td>
+          <td class="col-duration">5.05</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;Tests.test_website.TestHorizontalScrolling object at 0x106cc11e0&gt;<br/><br/>    def test_tjenester_page(self):<br/>        self.pageActions = PageActions(self.driver)<br/>        self.pageActions.tjenester_page()<br/>        self.pageActions.horizontal_scroll()<br/>        self.pageActions.do_screenshot(&quot;./Screen/tjenester1.png&quot;)<br/>        self.pageActions.horizontal_scroll_off()<br/>        self.pageActions.do_screenshot(&quot;./Screen/tjenester2.png&quot;)<br/>&gt;       self.pageActions.do_compare_img(&quot;tjenester1.png&quot;, &quot;tjenester2.png&quot;)<br/><br/>test_website.py:77: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>../Pages/PageActions.py:50: in do_compare_img<br/>    self.do_compare(name1, name2)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;Pages.PageActions.PageActions object at 0x106cc1390&gt;, name1 = &#x27;tjenester1.png&#x27;, name2 = &#x27;tjenester2.png&#x27;<br/><br/>    def do_compare(self, name1, name2):<br/>        directory = &quot;/Users/karolis/Documents/pythonProject/Its_Learning/Tests/Screen&quot;<br/>        image1 = &quot;{}/{}&quot;.format(directory, name1)<br/>        image2 = &quot;{}/{}&quot;.format(directory, name2)<br/>    <br/>        screenshot1 = self.hash_it(image1)<br/>        screenshot2 = self.hash_it(image2)<br/>&gt;       assert screenshot1 == screenshot2, &quot;Image HASH do not match. {} vs {}&quot;.format(screenshot1, screenshot2)<br/><span class="error">E       AssertionError: Image HASH do not match. 95d0b740ee7614faa7e73a98d94ff48a vs 13e683eae1feaf660ab7f19aca1b7174</span><br/><br/>compareImage.py:19: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">test_website.py::TestHorizontalScrolling::test_historie_page[chrome]</td>
+          <td class="col-duration">5.33</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;Tests.test_website.TestHorizontalScrolling object at 0x106ca5300&gt;<br/><br/>    def test_historie_page(self):<br/>        self.pageActions = PageActions(self.driver)<br/>        self.pageActions.historie_page()<br/>        self.pageActions.horizontal_scroll()<br/>        self.pageActions.do_screenshot(&quot;./Screen/historie1.png&quot;)<br/>        self.pageActions.horizontal_scroll_off()<br/>        self.pageActions.do_screenshot(&quot;./Screen/historie2.png&quot;)<br/>&gt;       self.pageActions.do_compare_img(&quot;historie1.png&quot;, &quot;historie2.png&quot;)<br/><br/>test_website.py:86: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>../Pages/PageActions.py:50: in do_compare_img<br/>    self.do_compare(name1, name2)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;Pages.PageActions.PageActions object at 0x106ca4970&gt;, name1 = &#x27;historie1.png&#x27;, name2 = &#x27;historie2.png&#x27;<br/><br/>    def do_compare(self, name1, name2):<br/>        directory = &quot;/Users/karolis/Documents/pythonProject/Its_Learning/Tests/Screen&quot;<br/>        image1 = &quot;{}/{}&quot;.format(directory, name1)<br/>        image2 = &quot;{}/{}&quot;.format(directory, name2)<br/>    <br/>        screenshot1 = self.hash_it(image1)<br/>        screenshot2 = self.hash_it(image2)<br/>&gt;       assert screenshot1 == screenshot2, &quot;Image HASH do not match. {} vs {}&quot;.format(screenshot1, screenshot2)<br/><span class="error">E       AssertionError: Image HASH do not match. ca92621e47cc2e048d5ea079691ac1c1 vs e8cd6422d99834017c456affcca606a2</span><br/><br/>compareImage.py:19: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_website.py::TestHorizontalScrolling::test_pris_page[chrome]</td>
+          <td class="col-duration">6.99</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_website.py::TestHorizontalScrolling::test_gratis_demo_page[chrome]</td>
+          <td class="col-duration">5.42</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>
