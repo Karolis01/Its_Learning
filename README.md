@@ -28,7 +28,7 @@ Have made a test to navigate to different pages. </br>
 Take screenshot of page, then make horizontal scroll and take screenshot again </br>
 And the last thing is to compare screenshots. (If you are not able to make horizontal scrolling, so screenshots should be the same) </br>
 Used Image HASH for comparison </br>
-![alt text](https://raw.githubusercontent.com/Karolis01/visual_test/master/screen.png)
+![alt text](https://raw.githubusercontent.com/Karolis01/Its_Learning/master/Tests/Screen/homepage1.png)
 
 # Screenshot of "Nurture Grid" section
 ![alt text](https://raw.githubusercontent.com/Karolis01/Its_Learning/master/Tests/Screen/Nurture_grid.png)
